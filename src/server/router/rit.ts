@@ -36,4 +36,23 @@ export const ritRouter = createRouter()
       const rit = await ctx.prisma.rit.findUnique({ where: { id: input.id } });
       return rit;
     },
+  })
+  .mutation("updateCompletely", {
+    input: z.object({
+      id: z.string().cuid(),
+      date: z.date(),
+      duration: z.number().int(),
+      distance: z.number().int(),
+      calories: z.number().int(),
+      resistance: z.number().int(),
+    }),
+    async resolve({ ctx, input }) {
+      const { id, ...rest } = input;
+      await ctx.prisma.rit.update({
+        where: {
+          id,
+        },
+        data: rest,
+      });
+    },
   });
