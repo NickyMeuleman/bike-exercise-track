@@ -27,4 +27,13 @@ export const ritRouter = createRouter()
       console.log(input);
       await ctx.prisma.rit.create({ data: input });
     },
+  })
+  .query("getById", {
+    input: z.object({
+      id: z.string().cuid(),
+    }),
+    async resolve({ input, ctx }) {
+      const rit = await ctx.prisma.rit.findUnique({ where: { id: input.id } });
+      return rit;
+    },
   });
