@@ -24,8 +24,7 @@ export const ritRouter = createRouter()
       resistance: z.number().int(),
     }),
     async resolve({ ctx, input }) {
-      console.log(input);
-      await ctx.prisma.rit.create({ data: input });
+      return await ctx.prisma.rit.create({ data: input });
     },
   })
   .query("getById", {
@@ -53,6 +52,14 @@ export const ritRouter = createRouter()
           id,
         },
         data: rest,
+      });
+    },
+  })
+  .mutation("delete", {
+    input: z.object({ id: z.string().cuid() }),
+    async resolve({ ctx, input }) {
+      await ctx.prisma.rit.delete({
+        where: { id: input.id },
       });
     },
   });
