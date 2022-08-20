@@ -4,18 +4,29 @@ import type { AppRouter } from "../server/router";
 import type { AppType } from "next/dist/shared/lib/utils";
 import superjson from "superjson";
 import "../styles/globals.css";
-import { Header } from '../components/Header'
+import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
+import dynamic from "next/dynamic";
+
+const OverlayContainer = dynamic(
+  async () => {
+    const mod = await import("react-aria");
+    return mod.OverlayContainer;
+  },
+  { ssr: false }
+);
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-1 flex justify-center">
-        <Component {...pageProps} />
-      </main>
-      <Footer />
-    </div>
+    <OverlayContainer>
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex justify-center">
+          <Component {...pageProps} />
+        </main>
+        <Footer />
+      </div>
+    </OverlayContainer>
   );
 };
 
