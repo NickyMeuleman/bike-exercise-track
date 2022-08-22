@@ -16,24 +16,13 @@ import {
   FilterIcon,
   SortAscendingIcon,
   SortDescendingIcon,
+  XIcon,
 } from "@heroicons/react/outline";
 import { DateRangePicker } from "../components/DateRangePicker/index";
 
 type Data = inferQueryOutput<"rit.getAll">;
 type SortKeys = keyof Omit<Data[0], "id">;
 type SortOrder = "ascn" | "desc";
-
-function usePrevious(value: any) {
-  // The ref object is a generic container whose current property is mutable ...
-  // ... and can hold any value, similar to an instance property on a class
-  const ref: any = useRef();
-  // Store current value in ref
-  useEffect(() => {
-    ref.current = value;
-  }, [value]); // Only re-run if value changes
-  // Return previous value (happens before update in useEffect above)
-  return ref.current;
-}
 
 function SortButton({
   sortOrder,
@@ -51,12 +40,12 @@ function SortButton({
       {sortKey === columnKey ? (
         <span className="grid">
           <SortAscendingIcon
-            className={`col-start-1 row-start-1  h-5 w-5 transition duration-300 ease-out ${
+            className={`col-start-1 row-start-1 h-5 w-5 transition duration-300 ease-out ${
               sortOrder === "ascn" ? "opacity-100" : "opacity-0"
             } text-sky-600`}
           />
           <SortDescendingIcon
-            className={`col-start-1 row-start-1 h-5 w-5 text-gray-500 duration-300 ease-out ${
+            className={`col-start-1 row-start-1 h-5 w-5 transition duration-300 ease-out ${
               sortOrder === "desc" ? "opacity-100" : "opacity-0"
             } text-sky-600`}
           />
@@ -79,31 +68,35 @@ const Home: NextPage = () => {
   const [sortKey, setSortKey] = useState<SortKeys>("distance");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ascn");
   const [filtercount, setFiltercount] = useState(1);
-  const prevFiltercount = usePrevious(filtercount);
   const pingref = useRef<HTMLSpanElement>(null);
-  console.log({ filtercount, prevFiltercount });
+  const [filterDuur, setFilterduur] = useState<
+    { operator: string; num: number }[]
+  >([]);
 
   useEffect(() => {
+    let count = 0;
     if (filterDates) {
-      setFiltercount(1);
-    } else {
-      setFiltercount(0);
+      count++;
     }
-  }, [filterDates]);
+    if (filterDuur) {
+      count += filterDuur.length;
+    }
+    setFiltercount(count);
+  }, [filterDates, filterDuur]);
 
   // forgive me for this, I just wanted to make the thing work. does tailwind have a way to remove classes after an animation completes once?
   useEffect(() => {
     if (pingref.current) {
-      pingref.current.classList.add("animate-ping");
+      pingref.current.classList.add("animate-ping-once");
       pingref.current.classList.remove("hidden");
       setTimeout(() => {
         if (pingref.current) {
-          pingref.current.classList.remove("animate-ping");
+          pingref.current.classList.remove("animate-ping-once");
           pingref.current.classList.add("hidden");
         }
       }, 300);
     }
-  }, [prevFiltercount, filtercount]);
+  }, [filtercount]);
 
   const ritten = trpc.useQuery(["rit.getAll"], {
     select: (data) => {
@@ -123,6 +116,17 @@ const Home: NextPage = () => {
 
           return !beforeStart && !afterEnd;
         });
+      }
+      if (filterDuur) {
+        for (let duur of filterDuur) {
+          filteredData = filteredData.filter((rit) => {
+            if (duur.operator === "lt") {
+              return rit.duration < duur.num;
+            } else {
+              return rit.duration > duur.num
+            }
+          });
+        }
       }
 
       const sortedData = filteredData.sort((a, b) => {
@@ -169,40 +173,105 @@ const Home: NextPage = () => {
             increment filtercount to demo ping animation
           </button>
           <button
-            className={`flex content-center items-center justify-center rounded-full border-2 border-transparent bg-sky-800 py-2 px-3 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
+            className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-800 py-2 px-3 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
             onClick={() => {
               setFilterDates(null);
+              setFilterduur([]);
             }}
             disabled={filtercount <= 0}
           >
-            <span className="mx-1">Alle</span>
+            <span>Alle</span>
             {filtercount > 0 && (
               <span className="relative inline-flex">
-                <span className="mr-1 flex rounded-full bg-sky-500 px-2 py-1 text-xs font-bold uppercase">
+                <span className="flex rounded-full bg-sky-500 px-2 py-1 text-xs font-bold uppercase">
                   {filtercount}
                 </span>
                 <span
                   ref={pingref}
-                  className={`absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75`}
-                  style={{
-                    animationIterationCount: 1,
-                    animationFillMode: "forwards",
-                  }}
+                  className={`absolute inline-flex h-full w-full animate-ping-once rounded-full bg-sky-400 opacity-75`}
                 ></span>
               </span>
             )}
-            <span className="mr-1 font-semibold">filters verwijderen</span>
+            <span className="font-semibold">filters verwijderen</span>
             <BackspaceIcon className="inline-block h-6 w-6 text-sky-100" />
           </button>
         </div>
-        <DateRangePicker
-          label="Datum"
-          value={filterDates}
-          onChange={setFilterDates}
-          clear={() => {
-            setFilterDates(null);
-          }}
-        />
+        <div className="flex gap-2">
+          <DateRangePicker
+            label="Datum"
+            value={filterDates}
+            onChange={setFilterDates}
+            clear={() => {
+              setFilterDates(null);
+            }}
+          />
+          <div className="flex flex-col">
+            <span className="text-sm text-gray-800">Duur</span>
+            <div className="relative flex rounded-l-md border border-gray-300 bg-white transition-colors group-focus-within:border-violet-600 group-hover:border-gray-400 group-focus-within:group-hover:border-violet-600">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const data = new FormData(e.target as HTMLFormElement);
+                  const operator = data.get("duur-select");
+                  const num = data.get("duur-num");
+
+                  if (operator && num) {
+                    setFilterduur((old: any): any => [
+                      ...old,
+                      { num, operator },
+                    ]);
+                  }
+                }}
+              >
+                <select name="duur-select">
+                  <option value={"gt"}>&gt;</option>
+                  <option value={"lt"}>&lt;</option>
+                </select>
+                <input name="duur-num" type="number" />
+              </form>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {filterDates && (
+            <button
+              className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-500 py-0.5 px-1 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
+              onClick={() => setFilterDates(null)}
+            >
+              <span className="text-sm text-sky-200">Datum:</span>
+              <span className="text-sm font-semibold text-sky-100">
+                {filterDates.start.toString()}{" "}
+                <span className="font-normal">tot</span>{" "}
+                {filterDates.end.toString()}
+              </span>
+              <XIcon className="inline-block h-3 w-auto text-sky-100" />
+            </button>
+          )}
+          {filterDuur?.map((filter, i) => {
+            return (
+              <button
+                key={i}
+                className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-500 py-0.5 px-1 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
+                onClick={() => {
+                  setFilterduur((old) => {
+                    return old.filter((item) => {
+                      return !(
+                        item.operator === filter.operator &&
+                        item.num === filter.num
+                      );
+                    });
+                  });
+                }}
+              >
+                <span className="text-sm text-sky-200">Duur:</span>
+                <span className="text-sm font-semibold text-sky-100">
+                  {filter.operator} {filter.num}
+                </span>
+                <XIcon className="inline-block h-3 w-auto text-sky-100" />
+              </button>
+            );
+          })}
+        </div>
         <table className="w-full divide-y divide-gray-300 rounded-md shadow-sm ring-offset-8 focus-within:border-indigo-300 focus-within:ring-8 focus-within:ring-indigo-200 focus-within:ring-opacity-50">
           <thead className="bg-gray-50">
             <tr>
