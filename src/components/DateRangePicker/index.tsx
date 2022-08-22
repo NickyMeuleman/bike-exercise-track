@@ -7,7 +7,11 @@ import { FieldButton } from "./Button";
 import { RangeCalendar } from "./RangeCalendar";
 import { DateField } from "./DateField";
 import { Popover } from "./Popover";
-import { CalendarIcon, ExclamationIcon } from "@heroicons/react/outline";
+import {
+  BackspaceIcon,
+  CalendarIcon,
+  ExclamationIcon,
+} from "@heroicons/react/outline";
 
 export function DateRangePicker(props: any) {
   let state = useDateRangePickerState(props);
@@ -19,7 +23,7 @@ export function DateRangePicker(props: any) {
     endFieldProps,
     buttonProps,
     dialogProps,
-    calendarProps
+    calendarProps,
   } = useDateRangePicker(props, state, ref);
 
   return (
@@ -34,8 +38,16 @@ export function DateRangePicker(props: any) {
             tot
           </span>
           <DateField {...endFieldProps} />
-          {state.validationState === "invalid" && (
+          {state.validationState === "invalid" ? (
             <ExclamationIcon className="w-6 h-6 text-red-500 absolute right-1" />
+          ) : (
+            (state.value?.start || state.value?.end) && (
+              <BackspaceIcon
+                className="w-6 h-6 text-slate-400 absolute right-1"
+                onClick={()=>{ props.clear();
+                }}
+              />
+            )
           )}
         </div>
         <FieldButton {...buttonProps} isPressed={state.isOpen}>

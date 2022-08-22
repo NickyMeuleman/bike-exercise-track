@@ -6,42 +6,151 @@ import {
   startOfMonth,
   endOfMonth,
   getLocalTimeZone,
-  parseAbsolute,
-  parseAbsoluteToLocal
+  parseAbsoluteToLocal,
+  CalendarDate,
 } from "@internationalized/date";
-import { trpc } from "../utils/trpc";
-import dynamic from "next/dynamic";
-import { useState } from "react";
+import { inferQueryOutput, trpc } from "../utils/trpc";
+import { MouseEventHandler, useEffect, useRef, useState } from "react";
+import {
+  BackspaceIcon,
+  FilterIcon,
+  SortAscendingIcon,
+  SortDescendingIcon,
+} from "@heroicons/react/outline";
+import { DateRangePicker } from "../components/DateRangePicker/index";
 
-const DateRangePicker = dynamic(
-  async () => {
-    const mod = await import("../components/DateRangePicker/index");
-    return mod.DateRangePicker;
-  },
-  {
-    ssr: false,
-  }
-);
+type Data = inferQueryOutput<"rit.getAll">;
+type SortKeys = keyof Omit<Data[0], "id">;
+type SortOrder = "ascn" | "desc";
+
+function usePrevious(value: any) {
+  // The ref object is a generic container whose current property is mutable ...
+  // ... and can hold any value, similar to an instance property on a class
+  const ref: any = useRef();
+  // Store current value in ref
+  useEffect(() => {
+    ref.current = value;
+  }, [value]); // Only re-run if value changes
+  // Return previous value (happens before update in useEffect above)
+  return ref.current;
+}
+
+function SortButton({
+  sortOrder,
+  columnKey,
+  sortKey,
+  onClick,
+}: {
+  sortOrder: SortOrder;
+  columnKey: SortKeys;
+  sortKey: SortKeys;
+  onClick: MouseEventHandler<HTMLButtonElement>;
+}) {
+  return (
+    <button onClick={onClick} className="px-3">
+      {sortKey === columnKey ? (
+        <span className="grid">
+          <SortAscendingIcon
+            className={`col-start-1 row-start-1  h-5 w-5 transition duration-300 ease-out ${
+              sortOrder === "ascn" ? "opacity-100" : "opacity-0"
+            } text-sky-600`}
+          />
+          <SortDescendingIcon
+            className={`col-start-1 row-start-1 h-5 w-5 text-gray-500 duration-300 ease-out ${
+              sortOrder === "desc" ? "opacity-100" : "opacity-0"
+            } text-sky-600`}
+          />
+        </span>
+      ) : (
+        <SortDescendingIcon className="col-start-1 row-start-1 h-5 w-5 text-slate-300 duration-300 ease-out" />
+      )}
+    </button>
+  );
+}
 
 const Home: NextPage = () => {
-  const [filterDates, setFilterDates] = useState({
+  const [filterDates, setFilterDates] = useState<{
+    start: CalendarDate;
+    end: CalendarDate;
+  } | null>({
     start: startOfMonth(today(getLocalTimeZone())),
     end: endOfMonth(today(getLocalTimeZone())),
   });
+  const [sortKey, setSortKey] = useState<SortKeys>("distance");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("ascn");
+  const [filtercount, setFiltercount] = useState(1);
+  const prevFiltercount = usePrevious(filtercount);
+  const pingref = useRef<HTMLSpanElement>(null);
+  console.log({ filtercount, prevFiltercount });
+
+  useEffect(() => {
+    if (filterDates) {
+      setFiltercount(1);
+    } else {
+      setFiltercount(0);
+    }
+  }, [filterDates]);
+
+  // forgive me for this, I just wanted to make the thing work. does tailwind have a way to remove classes after an animation completes once?
+  useEffect(() => {
+    if (pingref.current) {
+      pingref.current.classList.add("animate-ping");
+      pingref.current.classList.remove("hidden");
+      setTimeout(() => {
+        if (pingref.current) {
+          pingref.current.classList.remove("animate-ping");
+          pingref.current.classList.add("hidden");
+        }
+      }, 300);
+    }
+  }, [prevFiltercount, filtercount]);
 
   const ritten = trpc.useQuery(["rit.getAll"], {
     select: (data) => {
-      return data.filter((rit) => {
-        const date = parseAbsoluteToLocal(rit.date.toISOString())
-        const startCompare = date.compare(filterDates?.start ?? startOfMonth(today(getLocalTimeZone())));
-        const beforeStart = startCompare < 0;
-        const endCompare = date.compare(filterDates?.end ?? endOfMonth(today(getLocalTimeZone())));
-        const afterEnd = endCompare > 0;
+      let filteredData = data;
 
-        return !beforeStart && !afterEnd;
+      if (filterDates) {
+        filteredData = data.filter((rit) => {
+          const date = parseAbsoluteToLocal(rit.date.toISOString());
+          const startCompare = date.compare(
+            filterDates?.start ?? startOfMonth(today(getLocalTimeZone()))
+          );
+          const beforeStart = startCompare < 0;
+          const endCompare = date.compare(
+            filterDates?.end ?? endOfMonth(today(getLocalTimeZone()))
+          );
+          const afterEnd = endCompare > 0;
+
+          return !beforeStart && !afterEnd;
+        });
+      }
+
+      const sortedData = filteredData.sort((a, b) => {
+        return a[sortKey] > b[sortKey] ? 1 : -1;
       });
+
+      if (sortOrder === "ascn") {
+        sortedData.reverse();
+      }
+
+      return sortedData;
     },
   });
+
+  function changeSort(key: SortKeys) {
+    if (key == sortKey) {
+      setSortOrder(sortOrder === "ascn" ? "desc" : "ascn");
+    }
+    setSortKey(key);
+  }
+
+  const headers: { key: SortKeys; label: string }[] = [
+    { key: "date", label: "Datum" },
+    { key: "duration", label: "Duur" },
+    { key: "distance", label: "Afstand" },
+    { key: "calories", label: "Calorieën" },
+    { key: "resistance", label: "Weerstand" },
+  ];
 
   return (
     <>
@@ -50,46 +159,75 @@ const Home: NextPage = () => {
         <meta name="description" content="Generated by create-t3-app" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <main className="container mx-auto flex flex-col justify-center min-h-screen p-4 gap-4">
-        <h2 className="text-2xl text-slate-700">Filteren</h2>
+      <main className="container mx-auto flex min-h-screen flex-col justify-center gap-4 p-4">
+        <div className="flex justify-between align-baseline">
+          <h2 className="text-2xl text-slate-700">
+            Filteren{" "}
+            <FilterIcon className="inline-block h-6 w-6 text-slate-500" />
+          </h2>
+          <button onClick={() => setFiltercount(filtercount + 1)}>
+            increment filtercount to demo ping animation
+          </button>
+          <button
+            className={`flex content-center items-center justify-center rounded-full border-2 border-transparent bg-sky-800 py-2 px-3 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
+            onClick={() => {
+              setFilterDates(null);
+            }}
+            disabled={filtercount <= 0}
+          >
+            <span className="mx-1">Alle</span>
+            {filtercount > 0 && (
+              <span className="relative inline-flex">
+                <span className="mr-1 flex rounded-full bg-sky-500 px-2 py-1 text-xs font-bold uppercase">
+                  {filtercount}
+                </span>
+                <span
+                  ref={pingref}
+                  className={`absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75`}
+                  style={{
+                    animationIterationCount: 1,
+                    animationFillMode: "forwards",
+                  }}
+                ></span>
+              </span>
+            )}
+            <span className="mr-1 font-semibold">filters verwijderen</span>
+            <BackspaceIcon className="inline-block h-6 w-6 text-sky-100" />
+          </button>
+        </div>
         <DateRangePicker
           label="Datum"
           value={filterDates}
           onChange={setFilterDates}
+          clear={() => {
+            setFilterDates(null);
+          }}
         />
-        <table className="w-full divide-y divide-gray-300 shadow-sm focus-within:border-indigo-300 focus-within:ring-8 ring-offset-8 focus-within:ring-indigo-200 focus-within:ring-opacity-50 rounded-md">
+        <table className="w-full divide-y divide-gray-300 rounded-md shadow-sm ring-offset-8 focus-within:border-indigo-300 focus-within:ring-8 focus-within:ring-indigo-200 focus-within:ring-opacity-50">
           <thead className="bg-gray-50">
             <tr>
-              <th
-                scope="col"
-                className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 rounded-tl-md"
-              >
-                Datum
-              </th>
-              <th
-                scope="col"
-                className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900"
-              >
-                Duur
-              </th>
-              <th
-                scope="col"
-                className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-              >
-                Afstand
-              </th>
-              <th
-                scope="col"
-                className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900"
-              >
-                Calorieën
-              </th>
-              <th
-                scope="col"
-                className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 rounded-tr-md"
-              >
-                Weerstand
-              </th>
+              {headers.map(({ key, label }) => {
+                return (
+                  <th
+                    scope="col"
+                    className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 first:rounded-tl-md last:rounded-tr-md first:sm:pl-6"
+                    key={key}
+                  >
+                    {/* <th> is display: table-header-group; so this wrapping div lets us display:flex; the children */}
+                    <div className="flex">
+                      <p>{label}</p>
+                      <SortButton
+                        columnKey={key}
+                        onClick={() => changeSort(key)}
+                        {...{
+                          sortOrder,
+                          sortKey,
+                        }}
+                      />
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
