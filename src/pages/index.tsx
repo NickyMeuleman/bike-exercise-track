@@ -1,3 +1,5 @@
+// todo: type safety for filters
+
 import type { NextPage } from "next";
 import Head from "next/head";
 import Link from "next/link";
@@ -58,31 +60,20 @@ function SortButton({
 }
 
 const Home: NextPage = () => {
-  const [filterDates, setFilterDates] = useState<{
-    start: CalendarDate;
-    end: CalendarDate;
-  } | null>({
-    start: startOfMonth(today(getLocalTimeZone())),
-    end: endOfMonth(today(getLocalTimeZone())),
-  });
   const [sortKey, setSortKey] = useState<SortKeys>("distance");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ascn");
-  const [filtercount, setFiltercount] = useState(1);
   const pingref = useRef<HTMLSpanElement>(null);
-  const [filterDuur, setFilterduur] = useState<
-    { operator: string; num: number }[]
-  >([]);
-
-  useEffect(() => {
-    let count = 0;
-    if (filterDates) {
-      count++;
-    }
-    if (filterDuur) {
-      count += filterDuur.length;
-    }
-    setFiltercount(count);
-  }, [filterDates, filterDuur]);
+  const [filters, setFilters] = useState<
+    { kind: SortKeys; val: object | null }[]
+  >([
+    {
+      kind: "date",
+      val: {
+        start: startOfMonth(today(getLocalTimeZone())),
+        end: endOfMonth(today(getLocalTimeZone())),
+      },
+    },
+  ]);
 
   // forgive me for this, I just wanted to make the thing work. does tailwind have a way to remove classes after an animation completes once?
   useEffect(() => {
@@ -96,37 +87,34 @@ const Home: NextPage = () => {
         }
       }, 300);
     }
-  }, [filtercount]);
+  }, [filters.length]);
 
   const ritten = trpc.useQuery(["rit.getAll"], {
     select: (data) => {
       let filteredData = data;
 
-      if (filterDates) {
-        filteredData = data.filter((rit) => {
-          const date = parseAbsoluteToLocal(rit.date.toISOString());
-          const startCompare = date.compare(
-            filterDates?.start ?? startOfMonth(today(getLocalTimeZone()))
-          );
-          const beforeStart = startCompare < 0;
-          const endCompare = date.compare(
-            filterDates?.end ?? endOfMonth(today(getLocalTimeZone()))
-          );
-          const afterEnd = endCompare > 0;
+      for (let filter of filters) {
+        filteredData = filteredData.filter((rit) => {
+          if (filter.kind == "date") {
+            const date = parseAbsoluteToLocal(rit.date.toISOString());
+            const startCompare = date.compare(
+              filter.val?.start ?? startOfMonth(today(getLocalTimeZone()))
+            );
+            const beforeStart = startCompare < 0;
+            const endCompare = date.compare(
+              filter.val?.end ?? endOfMonth(today(getLocalTimeZone()))
+            );
+            const afterEnd = endCompare > 0;
 
-          return !beforeStart && !afterEnd;
-        });
-      }
-      if (filterDuur) {
-        for (let duur of filterDuur) {
-          filteredData = filteredData.filter((rit) => {
-            if (duur.operator === "lt") {
-              return rit.duration < duur.num;
+            return !beforeStart && !afterEnd;
+          } else {
+            if (filter.val.operator === "lt") {
+              return rit[filter.kind] < filter.val.num;
             } else {
-              return rit.duration > duur.num
+              return rit[filter.kind] > filter.val.num;
             }
-          });
-        }
+          }
+        });
       }
 
       const sortedData = filteredData.sort((a, b) => {
@@ -169,22 +157,18 @@ const Home: NextPage = () => {
             Filteren{" "}
             <FilterIcon className="inline-block h-6 w-6 text-slate-500" />
           </h2>
-          <button onClick={() => setFiltercount(filtercount + 1)}>
-            increment filtercount to demo ping animation
-          </button>
           <button
             className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-800 py-2 px-3 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
             onClick={() => {
-              setFilterDates(null);
-              setFilterduur([]);
+              setFilters([]);
             }}
-            disabled={filtercount <= 0}
+            disabled={filters.length <= 0}
           >
             <span>Alle</span>
-            {filtercount > 0 && (
+            {filters.length > 0 && (
               <span className="relative inline-flex">
                 <span className="flex rounded-full bg-sky-500 px-2 py-1 text-xs font-bold uppercase">
-                  {filtercount}
+                  {filters.length}
                 </span>
                 <span
                   ref={pingref}
@@ -196,76 +180,102 @@ const Home: NextPage = () => {
             <BackspaceIcon className="inline-block h-6 w-6 text-sky-100" />
           </button>
         </div>
-        <div className="flex gap-2">
-          <DateRangePicker
-            label="Datum"
-            value={filterDates}
-            onChange={setFilterDates}
-            clear={() => {
-              setFilterDates(null);
-            }}
-          />
-          <div className="flex flex-col">
-            <span className="text-sm text-gray-800">Duur</span>
-            <div className="relative flex rounded-l-md border border-gray-300 bg-white transition-colors group-focus-within:border-violet-600 group-hover:border-gray-400 group-focus-within:group-hover:border-violet-600">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const data = new FormData(e.target as HTMLFormElement);
-                  const operator = data.get("duur-select");
-                  const num = data.get("duur-num");
-
-                  if (operator && num) {
-                    setFilterduur((old: any): any => [
-                      ...old,
-                      { num, operator },
-                    ]);
+        <div className="flex flex-wrap gap-2">
+          {headers.map(({ key, label }) => {
+            if (key === "date") {
+              return (
+                <DateRangePicker
+                  key={key}
+                  label={label}
+                  value={
+                    filters.find(({ kind }) => kind == "date")?.val || null
                   }
-                }}
-              >
-                <select name="duur-select">
-                  <option value={"gt"}>&gt;</option>
-                  <option value={"lt"}>&lt;</option>
-                </select>
-                <input name="duur-num" type="number" />
-              </form>
-            </div>
-          </div>
+                  onChange={(newRange: any) => {
+                    setFilters((old) => {
+                      const withoutDate = old.filter(
+                        ({ kind }) => kind !== "date"
+                      );
+                      return [...withoutDate, { kind: "date", val: newRange }];
+                    });
+                  }}
+                  clear={() => {
+                    setFilters((old) =>
+                      old.filter(({ kind }) => kind !== "date")
+                    );
+                  }}
+                />
+              );
+            }
+            return (
+              <div key={key} className="flex flex-col">
+                <span className="text-sm text-gray-800">{label}</span>
+                <form
+                  className="flex"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const data = new FormData(e.target as HTMLFormElement);
+                    const operator = data.get(`${key}-op`);
+                    const num = data.get(`${key}-num`);
+
+                    if (operator && num) {
+                      setFilters((old) => {
+                        return [...old, { kind: key, val: { operator, num } }];
+                      });
+                    }
+                  }}
+                >
+                  <select name={`${key}-op`}>
+                    <option value={"gt"}>&gt;</option>
+                    <option value={"lt"}>&lt;</option>
+                  </select>
+                  <input name={`${key}-num`} type="number" className="w-20" />
+                  <button type="submit">Stel in</button>
+                </form>
+              </div>
+            );
+          })}
         </div>
-        <div className="flex gap-2">
-          {filterDates && (
-            <button
-              className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-500 py-0.5 px-1 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
-              onClick={() => setFilterDates(null)}
-            >
-              <span className="text-sm text-sky-200">Datum:</span>
-              <span className="text-sm font-semibold text-sky-100">
-                {filterDates.start.toString()}{" "}
-                <span className="font-normal">tot</span>{" "}
-                {filterDates.end.toString()}
-              </span>
-              <XIcon className="inline-block h-3 w-auto text-sky-100" />
-            </button>
-          )}
-          {filterDuur?.map((filter, i) => {
+        <div className="flex gap-1">
+          {filters.map(({ kind, val }, i) => {
+            if (kind === "date") {
+              return (
+                <button
+                  key={i}
+                  className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-500 py-0.5 px-1 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
+                  onClick={() =>
+                    setFilters((old) =>
+                      old.filter(({ kind }) => kind !== "date")
+                    )
+                  }
+                >
+                  <span className="text-sm text-sky-200">Datum:</span>
+                  <span className="text-sm font-semibold text-sky-100">
+                    {val?.start.toString()}{" "}
+                    <span className="font-normal">tot</span>{" "}
+                    {val?.end.toString()}
+                  </span>
+                  <XIcon className="inline-block h-3 w-auto text-sky-100" />
+                </button>
+              );
+            }
             return (
               <button
                 key={i}
                 className={`flex content-center items-center justify-center gap-1 rounded-full border-2 border-transparent bg-sky-500 py-0.5 px-1 text-base leading-normal text-sky-100 outline-none hover:bg-opacity-80 focus:ring-1 focus:ring-offset-2 active:ring-0 active:ring-offset-0 disabled:cursor-not-allowed disabled:bg-opacity-50`}
                 onClick={() => {
-                  setFilterduur((old) => {
-                    return old.filter((item) => {
-                      return !(
-                        item.operator === filter.operator &&
-                        item.num === filter.num
-                      );
+                  setFilters((old) => {
+                    return old.filter((filter) => {
+                      const sameKind = filter.kind === kind;
+                      const sameOp = filter.val.operator === val.operator;
+                      const sameNum = filter.val.num === val.num;
+                      return !(sameKind && sameOp && sameNum);
                     });
                   });
                 }}
               >
-                <span className="text-sm text-sky-200">Duur:</span>
+                <span className="text-sm text-sky-200">{kind}:</span>
                 <span className="text-sm font-semibold text-sky-100">
-                  {filter.operator} {filter.num}
+                  {val.operator} {val.num}
                 </span>
                 <XIcon className="inline-block h-3 w-auto text-sky-100" />
               </button>
