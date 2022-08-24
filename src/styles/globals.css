@@ -3,5 +3,18 @@
 @tailwind utilities;
 
 body {
-    @apply bg-slate-100
+  @apply bg-slate-200;
+}
+
+/* remove spinbuttons from number inputs */
+@layer utilities {
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    /* -webkit-appearance: none;
+      margin: 0; */
+  }
+}
+
+:focus-visible {
+  @apply outline-offset-4;
 }

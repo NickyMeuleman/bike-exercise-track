@@ -39,8 +39,8 @@ function DateSegment({ segment, state }: any) {
             ? String(segment.maxValue).length + "ch"
             : undefined,
       }}
-      className={`px-0.5 box-content tabular-nums text-right outline-none rounded-sm focus:bg-violet-600 focus:text-white group ${
-        !segment.isEditable ? "text-gray-500" : "text-gray-800"
+      className={`px-0.5 box-content tabular-nums text-right outline-none rounded-sm focus:bg-sky-600 focus:text-white group ${
+        !segment.isEditable ? "text-gray-500" : "text-gray-600"
       }`}
     >
       {/* Always reserve space for the placeholder, to prevent layout shift when editing. */}
