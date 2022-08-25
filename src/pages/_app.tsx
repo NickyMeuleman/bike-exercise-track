@@ -7,6 +7,7 @@ import "../styles/globals.css";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 
 const OverlayContainer = dynamic(
   async () => {
@@ -17,13 +18,17 @@ const OverlayContainer = dynamic(
 );
 
 const MyApp: AppType = ({ Component, pageProps }) => {
+  const { pathname } = useRouter();
+
   return (
     <OverlayContainer>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-1 flex justify-center">
-          <Component {...pageProps} />
-        </main>
+      <div className="flex min-h-screen flex-col">
+        <div className="flex-1">
+          {pathname !== "/" ? <Header /> : null}
+          <main>
+            <Component {...pageProps} />
+          </main>
+        </div>
         <Footer />
       </div>
     </OverlayContainer>
