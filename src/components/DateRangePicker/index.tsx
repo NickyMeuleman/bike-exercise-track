@@ -27,8 +27,8 @@ export function DateRangePicker(props: any) {
   } = useDateRangePicker(props, state, ref);
 
   return (
-    <div className="relative inline-flex flex-col text-left font-mono">
-      <span {...labelProps} className="text-sm text-gray-800 font-sans">
+    <div className="relative inline-flex flex-col text-left font-mono gap-0.5">
+      <span {...labelProps} className="text-sm text-slate-100 font-sans">
         {props.label}
       </span>
       <div {...groupProps} ref={ref} className="flex group">
